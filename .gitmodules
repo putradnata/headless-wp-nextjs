@@ -1,0 +1,6 @@
+[submodule "cms-headless-wp-nextjs"]
+	path = cms-headless-wp-nextjs
+	url = git@github.com:putradnata/cms-headless-wp-nextjs.git
+[submodule "fe-headless-wp-nextjs"]
+	path = fe-headless-wp-nextjs
+	url = git@github.com:putradnata/fe-headless-wp-nextjs.git
