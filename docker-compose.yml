@@ -1,0 +1,88 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # MySQL Database
+  # ─────────────────────────────────────────────
+  db:
+    image: mysql:8.4.8
+    container_name: db-headless-wp-nextjs
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - headless-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # WordPress (Headless CMS)
+  # ─────────────────────────────────────────────
+  wordpress:
+    build:
+      context: ./cms-headless-wp-nextjs
+      dockerfile: Dockerfile
+    container_name: cms-headless-wp-nextjs
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX:-wp_}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_ENVIRONMENT_TYPE', 'local');
+        define('GRAPHQL_DEBUG', true);
+        define('HEADLESS_FRONTEND_URL', '${FRONTEND_URL:-http://localhost:3000}');
+    volumes:
+      - wp_data:/var/www/html
+      - ./cms-headless-wp-nextjs/mu-plugins:/var/www/html/wp-content/mu-plugins
+    ports:
+      - "8000:80"
+    networks:
+      - headless-network
+
+  # ─────────────────────────────────────────────
+  # Next.js Frontend
+  # ─────────────────────────────────────────────
+  frontend:
+    image: node:24-alpine
+    container_name: fe-headless-wp-nextjs
+    restart: unless-stopped
+    working_dir: /app
+    depends_on:
+      - wordpress
+    environment:
+      WP_GRAPHQL_URL: http://wordpress:80/graphql
+      NEXT_PUBLIC_WP_GRAPHQL_URL: http://localhost:8000/graphql
+      NODE_ENV: development
+    volumes:
+      - ./fe-headless-wp-nextjs:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    command: sh -c "npm install -g pnpm@10 && pnpm install && pnpm dev"
+    networks:
+      - headless-network
+
+# ─────────────────────────────────────────────
+# Volumes & Networks
+# ─────────────────────────────────────────────
+volumes:
+  db_data:
+  wp_data:
+
+networks:
+  headless-network:
+    driver: bridge
